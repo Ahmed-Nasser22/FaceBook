@@ -2,22 +2,33 @@
 using api.Helpers;
 using api.Interfaces;
 using api.Services;
+using api.SignalR;
+
 using Microsoft.EntityFrameworkCore;
-using System.Runtime.CompilerServices;
 
 namespace api.Extensions
 {
     public static class ApplicationServiceExtensions
     {
-        public static IServiceCollection AddApplicationServices (this IServiceCollection Services , IConfiguration Config)
+        public static IServiceCollection AddApplicationServices(this IServiceCollection services,
+            IConfiguration config)
         {
-            Services.AddAutoMapper(typeof(AutoMapperProfiles).Assembly);
-            Services.AddScoped<IUserToken, TokenService>();
-            Services.AddScoped<IUserRepository, UserRepository>();
-            Services.AddDbContext<DataContext>(options => {
-                options.UseSqlite(Config.GetConnectionString("DefaultConnection"));
+            services.AddDbContext<DataContext>(opt =>
+            {
+                opt.UseSqlite(config.GetConnectionString("DefaultConnection"));
             });
-            return Services;
+            services.AddCors();
+            services.AddScoped<ITokenService, TokenService>();
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+            services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
+            services.AddScoped<IPhotoService, PhotoService>();
+            services.AddScoped <logUserActivity>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+        
+            services.AddSignalR();
+            services.AddSingleton<PresenceTracker>();
+
+            return services;
         }
     }
 }

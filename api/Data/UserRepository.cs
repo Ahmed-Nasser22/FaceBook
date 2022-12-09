@@ -1,9 +1,11 @@
 ﻿using api.DTOs;
 using api.Entities;
+using api.Helpers;
 using api.Interfaces;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace api.Data
 {
@@ -28,10 +30,24 @@ namespace api.Data
 
 
 
-        public async Task<IEnumerable<MemberDto>> GetMembersAsync()
+        public async Task<PagedList<MemberDto>> GetMembersAsync(UserParams userParams)
         {
-            return await _context.Users
-                  .ProjectTo<MemberDto>(_Mapper.ConfigurationProvider).ToListAsync();
+            var query = _context.Users.AsQueryable();
+            query = query.Where(u=>u.UserName != userParams.CurrentUsername);
+            query = query.Where (u=>u.Gender == userParams.Gender);
+
+            var MinDob =    DateOnly.FromDateTime(DateTime.Today.AddYears(-userParams.MaxAge-1));
+            var MaxDob =    DateOnly.FromDateTime(DateTime.Today.AddYears(-userParams.MinAge));
+
+            query = query.Where(u => u.DateOfBirth >= MinDob && u.DateOfBirth <= MaxDob);
+
+            query = userParams.OrderBy switch
+            {
+                "created" => query.OrderByDescending  (u=>u.Created),
+                _ => query.OrderByDescending(u=>u.LastActive),
+            };
+            return await PagedList<MemberDto>.CreateAsync(query.AsNoTracking().ProjectTo<MemberDto>(_Mapper.ConfigurationProvider)
+                  , userParams.PageNumber , userParams.PageSize);
         }
 
         public async Task<AppUser> GetUserByIdAsync(int id)
@@ -50,14 +66,16 @@ namespace api.Data
             return await _context.Users.Include(p => p.Photos).ToListAsync();
         }
 
-        public async Task<bool> SaveAllAsync()
-        {
-            return await _context.SaveChangesAsync() > 0;
-        }
 
         public void Update(AppUser User)
         {
             _context.Entry(User).State = EntityState.Modified;
         }
+
+        public async Task<string> GetUserGender(string username)
+        {
+            return await _context.Users.Where(x=>x.UserName == username).Select(g=>g.Gender).FirstOrDefaultAsync();
+        }
+
     }
 }
